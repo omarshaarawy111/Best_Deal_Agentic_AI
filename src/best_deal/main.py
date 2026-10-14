@@ -71,9 +71,10 @@ def html_for(log_data: list[str]) -> str:
     Returns:
         HTML container containing the latest log messages.
     """
-    output = "<br>".join(log_data[-18:])
+    output = "<br>".join(log_data)
     return (
-        "<div id='scrollContent' style='height:400px;overflow-y:auto;"
+        "<div id='scrollContent' style='height:400px;max-height:400px;"
+        "overflow-y:scroll;overflow-x:auto;white-space:nowrap;"
         "border:1px solid #ccc;background-color:#222229;padding:10px;'>"
         f"{output}</div>"
     )
@@ -143,7 +144,7 @@ class App:
                 f"${opportunity.deal.price:.2f}",
                 f"${opportunity.estimate:.2f}",
                 f"${opportunity.discount:.2f}",
-                opportunity.deal.url,
+                f"[Open deal]({opportunity.deal.url})",
             ]
             for opportunity in opportunities
         ]
@@ -153,7 +154,8 @@ class App:
         log_data: list[str],
         log_queue: queue.Queue[str],
         result_queue: queue.Queue[list[list[Any]]],
-    ) -> Generator[tuple[list[str], str, list[list[Any]]], None, None]:
+        started_at: float,
+    ) -> Generator[tuple[list[str], str, list[list[Any]], str], None, None]:
         """
         Stream logs and results from one background framework execution.
 
@@ -167,6 +169,7 @@ class App:
         """
         initial_result = self.table_for(self.get_agent_framework().memory)
         final_result: list[list[Any]] | None = None
+        last_time_update = 0.0
         while True:
             emitted = False
             try:
@@ -180,9 +183,18 @@ class App:
                 emitted = True
             except queue.Empty:
                 pass
-            if emitted:
-                yield log_data, html_for(log_data), final_result or initial_result
-            elif final_result is not None:
+            elapsed = time.perf_counter() - started_at
+            time_update_due = elapsed - last_time_update >= 0.5
+            if emitted or time_update_due or final_result is not None:
+                last_time_update = elapsed
+                status = "Completed" if final_result is not None else "Running"
+                yield (
+                    log_data,
+                    html_for(log_data),
+                    final_result or initial_result,
+                    f"**Execution time:** `{elapsed:.1f} seconds` ({status})",
+                )
+            if final_result is not None:
                 break
             else:
                 time.sleep(0.1)
@@ -198,7 +210,7 @@ class App:
 
     def run_with_logging(
         self, initial_log_data: list[str]
-    ) -> Generator[tuple[list[str], str, list[list[Any]]], None, None]:
+    ) -> Generator[tuple[list[str], str, list[list[Any]], str], None, None]:
         """
         Execute the deal framework in a background thread while streaming logs.
 
@@ -210,6 +222,7 @@ class App:
         """
         log_queue: queue.Queue[str] = queue.Queue()
         result_queue: queue.Queue[list[list[Any]]] = queue.Queue()
+        started_at = time.perf_counter()
         handler = setup_logging(log_queue)
 
         def worker() -> None:
@@ -228,7 +241,7 @@ class App:
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
         try:
-            yield from self.update_output(initial_log_data, log_queue, result_queue)
+            yield from self.update_output(initial_log_data, log_queue, result_queue, started_at)
         finally:
             logging.getLogger().removeHandler(handler)
 
@@ -279,6 +292,7 @@ class App:
             with gr.Row():
                 opportunities_dataframe = gr.Dataframe(
                     headers=["Description", "Price", "Estimate", "Discount", "URL"],
+                    datatype=["str", "str", "str", "str", "markdown"],
                     wrap=True,
                     row_count=(10, "dynamic"),
                     column_count=(5, "fixed"),
@@ -286,17 +300,18 @@ class App:
                 )
             with gr.Row():
                 logs = gr.HTML()
+            execution_time = gr.Markdown("**Execution time:** Waiting for run")
 
             ui.load(
                 self.run_with_logging,
                 inputs=[log_data],
-                outputs=[log_data, logs, opportunities_dataframe],
+                outputs=[log_data, logs, opportunities_dataframe, execution_time],
             )
             timer = gr.Timer(value=300, active=True)
             timer.tick(
                 self.run_with_logging,
                 inputs=[log_data],
-                outputs=[log_data, logs, opportunities_dataframe],
+                outputs=[log_data, logs, opportunities_dataframe, execution_time],
             )
             opportunities_dataframe.select(self.do_select)
         return ui

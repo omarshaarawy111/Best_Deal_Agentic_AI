@@ -18,6 +18,10 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, ClassVar, Self
 
+import truststore
+
+truststore.inject_into_ssl()
+
 import feedparser
 import requests
 from bs4 import BeautifulSoup

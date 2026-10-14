@@ -43,6 +43,7 @@ setup(
         "tenacity",
         "torch",
         "tqdm",
+        "truststore",
     ],
     extras_require={
         "dev": ["pytest", "black", "ruff", "mypy"],

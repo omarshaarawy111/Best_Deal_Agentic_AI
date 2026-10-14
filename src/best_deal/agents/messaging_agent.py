@@ -44,6 +44,7 @@ class MessagingAgent(Agent):
         """
         self.pushover_user = os.getenv("PUSHOVER_USER")
         self.pushover_token = os.getenv("PUSHOVER_TOKEN")
+        self.pushover_enabled = os.getenv("BEST_DEAL_ENABLE_PUSHOVER", "false").lower() == "true"
         self.log("Messaging Agent is ready")
 
     def push(self, text: str) -> None:
@@ -75,6 +76,9 @@ class MessagingAgent(Agent):
         Returns:
             None.
         """
+        if not self.pushover_enabled:
+            self.log("Messaging Agent notification disabled; deal remains available in the UI")
+            return
         text = (
             f"Deal Alert! Price=${opportunity.deal.price:.2f}, "
             f"Estimate=${opportunity.estimate:.2f}, "
@@ -119,6 +123,18 @@ class MessagingAgent(Agent):
         Returns:
             None.
         """
+        if not self.pushover_enabled:
+            self.log("Messaging Agent notification disabled; deal remains available in the UI")
+            return
         text = self.craft_message(description, deal_price, estimated_true_value)
-        self.push(f"{text[:800]}... {url}")
-        self.log("Messaging Agent completed")
+        try:
+            self.push(f"{text[:800]}... {url}")
+        except RuntimeError as exc:
+            self.log(f"Messaging Agent notification skipped: {exc}")
+        except requests.HTTPError as exc:
+            response_text = exc.response.text[:300] if exc.response is not None else str(exc)
+            self.log(f"Messaging Agent notification failed: {response_text}")
+        except requests.RequestException as exc:
+            self.log(f"Messaging Agent notification failed: {exc}")
+        else:
+            self.log("Messaging Agent completed")
