@@ -117,6 +117,9 @@ class App:
             None.
         """
         self.agent_framework = agent_framework or DealAgentFramework()
+        self._table_reset_at = time.monotonic()
+        self._table_memory_index = 0
+        self._table_flush_seconds = 24 * 60 * 60
 
     def get_agent_framework(self) -> DealAgentFramework:
         """
@@ -149,6 +152,26 @@ class App:
             for opportunity in opportunities
         ]
 
+    def visible_table_for(self, opportunities: list) -> list[list[Any]]:
+        """
+        Return UI rows while keeping the agent memory unchanged.
+
+        The table is reset after 24 hours by moving its display boundary to
+        the current end of memory. New opportunities are shown after that
+        boundary; persisted opportunities remain available to the agent.
+
+        Args:
+            opportunities: Persisted opportunities from the agent framework.
+
+        Returns:
+            Rows currently visible in the Gradio table.
+        """
+        if time.monotonic() - self._table_reset_at >= self._table_flush_seconds:
+            self._table_reset_at = time.monotonic()
+            self._table_memory_index = len(opportunities)
+        self._table_memory_index = min(self._table_memory_index, len(opportunities))
+        return self.table_for(opportunities[self._table_memory_index :])
+
     def update_output(
         self,
         log_data: list[str],
@@ -167,7 +190,7 @@ class App:
         Yields:
             Updated log state, log HTML, and current results table.
         """
-        initial_result = self.table_for(self.get_agent_framework().memory)
+        initial_result = self.visible_table_for(self.get_agent_framework().memory)
         final_result: list[list[Any]] | None = None
         last_time_update = 0.0
         while True:
@@ -206,7 +229,7 @@ class App:
         Returns:
             Table rows for the Gradio dataframe.
         """
-        return self.table_for(self.get_agent_framework().run())
+        return self.visible_table_for(self.get_agent_framework().run())
 
     def run_with_logging(
         self, initial_log_data: list[str]
@@ -236,7 +259,10 @@ class App:
                 result_queue.put(self.do_run())
             except Exception as exc:
                 logging.getLogger().exception("Best Deal run failed")
-                result_queue.put(self.table_for(self.get_agent_framework().memory) + [[f"ERROR: {exc}", "", "", "", ""]])
+                result_queue.put(
+                    self.visible_table_for(self.get_agent_framework().memory)
+                    + [[f"ERROR: {exc}", "", "", "", ""]]
+                )
 
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
