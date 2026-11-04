@@ -26,41 +26,53 @@ SRC_ROOT = PROJECT_ROOT / "src"
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 RUNTIME_DIR = PROJECT_ROOT / "runtime"
 
-DNN_WEIGHTS_PATH = Path(
-    os.getenv(
-        "BEST_DEAL_DNN_WEIGHTS",
-        str(ARTIFACTS_DIR / "models" / "deep_neural_network.pth"),
-    )
+
+def _configured_path(name: str, default: Path) -> Path:
+    """
+    Resolve an environment-backed path relative to the repository.
+
+    Relative paths in ``.env`` should not depend on the directory used to
+    launch the application.
+    """
+    configured = os.getenv(name)
+    path = Path(configured) if configured else default
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+DNN_WEIGHTS_PATH = _configured_path(
+    "BEST_DEAL_DNN_WEIGHTS",
+    ARTIFACTS_DIR / "models" / "deep_neural_network.pth",
 )
 
 RAG_DIR = ARTIFACTS_DIR / "rag"
-RAG_CHUNKS_PATH = Path(
-    os.getenv("BEST_DEAL_RAG_CHUNKS", str(RAG_DIR / "chunks" / "kb_chunks.json"))
+RAG_CHUNKS_PATH = _configured_path(
+    "BEST_DEAL_RAG_CHUNKS",
+    RAG_DIR / "chunks" / "kb_chunks.json",
 )
-RAG_VECTORSTORE_PATH = Path(
-    os.getenv("BEST_DEAL_RAG_VECTORSTORE", str(RAG_DIR / "preprocessed_db"))
+RAG_VECTORSTORE_PATH = _configured_path(
+    "BEST_DEAL_RAG_VECTORSTORE",
+    RAG_DIR / "preprocessed_db",
 )
-RAG_BM25_PATH = Path(
-    os.getenv("BEST_DEAL_RAG_BM25", str(RAG_DIR / "bm25_index.pkl"))
+RAG_BM25_PATH = _configured_path(
+    "BEST_DEAL_RAG_BM25",
+    RAG_DIR / "bm25_index.pkl",
 )
-RAG_GOLDEN_PATH = Path(
-    os.getenv("BEST_DEAL_RAG_GOLDEN", str(RAG_DIR / "evaluation" / "golden_dataset_200.json"))
+RAG_GOLDEN_PATH = _configured_path(
+    "BEST_DEAL_RAG_GOLDEN",
+    RAG_DIR / "evaluation" / "golden_dataset_200.json",
 )
-RAG_EVAL_CHECKPOINT_PATH = Path(
-    os.getenv(
-        "BEST_DEAL_RAG_EVAL_CHECKPOINT",
-        str(RAG_DIR / "evaluation" / "eval_checkpoint.jsonl"),
-    )
+RAG_EVAL_CHECKPOINT_PATH = _configured_path(
+    "BEST_DEAL_RAG_EVAL_CHECKPOINT",
+    RAG_DIR / "evaluation" / "eval_checkpoint.jsonl",
 )
-RAG_EVAL_RESULTS_PATH = Path(
-    os.getenv(
-        "BEST_DEAL_RAG_EVAL_RESULTS",
-        str(RAG_DIR / "evaluation" / "rag_evaluation_results.csv"),
-    )
+RAG_EVAL_RESULTS_PATH = _configured_path(
+    "BEST_DEAL_RAG_EVAL_RESULTS",
+    RAG_DIR / "evaluation" / "rag_evaluation_results.csv",
 )
 
-AGENT_MEMORY_PATH = Path(
-    os.getenv("BEST_DEAL_AGENT_MEMORY", str(RUNTIME_DIR / "memory.json"))
+AGENT_MEMORY_PATH = _configured_path(
+    "BEST_DEAL_AGENT_MEMORY",
+    RUNTIME_DIR / "memory.json",
 )
 
 RAG_COLLECTION_NAME = os.getenv("BEST_DEAL_RAG_COLLECTION", "docs")

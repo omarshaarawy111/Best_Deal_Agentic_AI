@@ -68,7 +68,11 @@ class DealAgentFramework:
         """
         self.memory_path.parent.mkdir(parents=True, exist_ok=True)
         self.memory_path.write_text(
-            json.dumps([opportunity.model_dump() for opportunity in self.memory], indent=2, ensure_ascii=False),
+            json.dumps(
+                [opportunity.model_dump(mode="json") for opportunity in self.memory],
+                indent=2,
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
 

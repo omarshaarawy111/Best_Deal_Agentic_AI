@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from typing import Any, ClassVar, Self
 
 import truststore
@@ -33,6 +34,12 @@ FEEDS = [
     "https://www.dealnews.com/f1912/Smart-Home/?rss=1",
     "https://www.dealnews.com/c238/Automotive/?rss=1",
     "https://www.dealnews.com/c196/Home-Garden/?rss=1",
+    "https://www.dealnews.com/c202/Clothing-Accessories/?rss=1",
+    "https://www.dealnews.com/c40/Store-Events/?rss=1",
+    "https://www.dealnews.com/c304/Home-Garden/Appliances/?rss=1",
+    "https://www.dealnews.com/c197/Home-Garden/Tools-Hardware/?rss=1",
+    "https://www.dealnews.com/c213/Home-Garden/Food-Drink/?rss=1",
+    "https://www.dealnews.com/c221/Home-Garden/Pets/?rss=1",
 ]
 
 
@@ -197,3 +204,4 @@ class Opportunity(BaseModel):
     deal: Deal
     estimate: float
     discount: float
+    detected_at: datetime | None = None

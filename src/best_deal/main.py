@@ -10,7 +10,7 @@ Responsibilities:
     - Launch the Best Deal Gradio application.
     - Keep UI concerns separate from agent and RAG business logic.
     - Stream logs from background agent execution without blocking Gradio.
-    - Refresh the autonomous deal scan on the existing five-minute timer.
+    - Run one autonomous deal scan when the UI loads.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import logging
 import queue
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Generator
 
 import gradio as gr
@@ -117,9 +118,9 @@ class App:
             None.
         """
         self.agent_framework = agent_framework or DealAgentFramework()
-        self._table_reset_at = time.monotonic()
-        self._table_memory_index = 0
-        self._table_flush_seconds = 24 * 60 * 60
+        self._table_window = timedelta(hours=24)
+        self._run_lock = threading.Lock()
+        self._run_started = False
 
     def get_agent_framework(self) -> DealAgentFramework:
         """
@@ -154,11 +155,7 @@ class App:
 
     def visible_table_for(self, opportunities: list) -> list[list[Any]]:
         """
-        Return UI rows while keeping the agent memory unchanged.
-
-        The table is reset after 24 hours by moving its display boundary to
-        the current end of memory. New opportunities are shown after that
-        boundary; persisted opportunities remain available to the agent.
+        Return opportunities detected within the last 24 hours.
 
         Args:
             opportunities: Persisted opportunities from the agent framework.
@@ -166,11 +163,25 @@ class App:
         Returns:
             Rows currently visible in the Gradio table.
         """
-        if time.monotonic() - self._table_reset_at >= self._table_flush_seconds:
-            self._table_reset_at = time.monotonic()
-            self._table_memory_index = len(opportunities)
-        self._table_memory_index = min(self._table_memory_index, len(opportunities))
-        return self.table_for(opportunities[self._table_memory_index :])
+        cutoff = datetime.now(timezone.utc) - self._table_window
+        return self.table_for(
+            opportunity
+            for opportunity in opportunities
+            if opportunity.detected_at is not None
+            and opportunity.detected_at.astimezone(timezone.utc) >= cutoff
+        )
+
+    def visible_opportunities_for(self, opportunities: list) -> list:
+        """
+        Return the opportunity objects represented by the current table rows.
+        """
+        cutoff = datetime.now(timezone.utc) - self._table_window
+        return [
+            opportunity
+            for opportunity in opportunities
+            if opportunity.detected_at is not None
+            and opportunity.detected_at.astimezone(timezone.utc) >= cutoff
+        ]
 
     def update_output(
         self,
@@ -243,6 +254,16 @@ class App:
         Yields:
             Updated Gradio outputs while the background run executes.
         """
+        with self._run_lock:
+            if self._run_started:
+                yield (
+                    initial_log_data,
+                    html_for(initial_log_data),
+                    self.visible_table_for(self.get_agent_framework().memory),
+                    "**Execution time:** `0.0 seconds` (Already completed)",
+                )
+                return
+            self._run_started = True
         log_queue: queue.Queue[str] = queue.Queue()
         result_queue: queue.Queue[list[list[Any]]] = queue.Queue()
         started_at = time.perf_counter()
@@ -281,7 +302,7 @@ class App:
         Returns:
             None.
         """
-        opportunities = self.get_agent_framework().memory
+        opportunities = self.visible_opportunities_for(self.get_agent_framework().memory)
         if not opportunities or not selected_index.index:
             return
         row = selected_index.index[0]
@@ -310,10 +331,7 @@ class App:
         with gr.Blocks(title="Best Deal", fill_width=True) as ui:
             log_data = gr.State([])
             gr.Markdown(
-                "<div style='text-align:center;font-size:24px'><strong>Best Deal</strong> - Autonomous Agent Framework that hunts for deals</div>"
-            )
-            gr.Markdown(
-                "<div style='text-align:center;font-size:14px'>A fine-tuned pricing model deployed remotely and a RAG pipeline with a frontier model collaborate to identify online deals.</div>"
+                "<div style='text-align:center;font-size:24px'><strong>Best Deal App</strong></div>"
             )
             with gr.Row():
                 opportunities_dataframe = gr.Dataframe(
@@ -329,12 +347,6 @@ class App:
             execution_time = gr.Markdown("**Execution time:** Waiting for run")
 
             ui.load(
-                self.run_with_logging,
-                inputs=[log_data],
-                outputs=[log_data, logs, opportunities_dataframe, execution_time],
-            )
-            timer = gr.Timer(value=300, active=True)
-            timer.tick(
                 self.run_with_logging,
                 inputs=[log_data],
                 outputs=[log_data, logs, opportunities_dataframe, execution_time],

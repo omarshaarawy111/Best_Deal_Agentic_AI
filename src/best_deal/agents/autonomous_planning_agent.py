@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from openai import OpenAI
@@ -108,6 +109,7 @@ Then just reply OK to indicate success."""
             deal=deal,
             estimate=estimated_true_value,
             discount=estimated_true_value - deal_price,
+            detected_at=datetime.now(timezone.utc),
         )
         return "Notification sent ok"
 

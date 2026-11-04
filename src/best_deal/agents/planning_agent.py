@@ -14,6 +14,7 @@ Responsibilities:
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from typing import Iterable
 
 from best_deal.agents.agent import Agent
@@ -57,7 +58,12 @@ class PlanningAgent(Agent):
             Price-estimated opportunity.
         """
         estimate = self.ensemble.price(deal.product_description)
-        return Opportunity(deal=deal, estimate=estimate, discount=estimate - deal.price)
+        return Opportunity(
+            deal=deal,
+            estimate=estimate,
+            discount=estimate - deal.price,
+            detected_at=datetime.now(timezone.utc),
+        )
 
     def plan(self, memory: Iterable[Opportunity] = ()) -> Opportunity | None:
         """
