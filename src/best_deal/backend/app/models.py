@@ -8,7 +8,7 @@ Description:
 
 from datetime import datetime, timezone
 from .database import Base
-from sqlalchemy import Column, Integer, Float, String, Text, Boolean, DateTime, JSON, ForeignKey
+from sqlalchemy import Column, Integer, Numeric, String, Text, Boolean, DateTime, JSON, ForeignKey
 
 class Users(Base):
     """
@@ -26,29 +26,32 @@ class Users(Base):
     preferred_product = Column(JSON, nullable=True)
     preferred_country_market = Column(JSON, nullable=True)
     role = Column(String(50), default="user", nullable=False)
+    status = Column(String(20),default="active",nullable=False)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False
     )
-    is_active = Column(Boolean, default=True, nullable=False)
 
-class Deals(Base):
+
+class GlobalDeals(Base):
     """
     This model represents a deal item that is available globally.
 
     Returns:
-        A SQLAlchemy model mapped to the deals table.
+        A SQLAlchemy model mapped to the global_deals table.
     """
-    __tablename__ = 'deals'  
+    __tablename__ = 'global_deals'  
     
     id = Column(Integer, primary_key=True, index=True)
     product_title = Column(String(300), nullable=True)
     product_description = Column(Text, nullable=True)
     product_url = Column(String(1000), nullable=True)
-    actual_price = Column(Float, nullable=True)
-    estimated_price = Column(Float, nullable=True)
-    discount = Column(Float, nullable=True)
+    actual_price = Column(Numeric(12, 2), nullable=True)
+    estimated_price = Column(Numeric(12, 2), nullable=True)
+    discount = Column(Numeric(5, 2), nullable=True)
+    currency = Column(String(10), nullable=True)
+    country = Column(String(100), nullable=True)
     created_at = Column(
             DateTime(timezone=True),
             default=lambda: datetime.now(timezone.utc),
@@ -57,7 +60,7 @@ class Deals(Base):
 
 class UserDeals(Base):
     """
-    This model represents a deal item that is owned by a specific user.
+    This model represents a relation between a user and a global deal.
 
     Returns:
         A SQLAlchemy model mapped to the user_deals table.
@@ -67,7 +70,7 @@ class UserDeals(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    deal_id = Column(Integer, ForeignKey('deals.id'), nullable=False)
+    deal_id = Column(Integer, ForeignKey('global_deals.id'), nullable=False)
     recommended_at = Column(
                 DateTime(timezone=True),
                 default=lambda: datetime.now(timezone.utc),
